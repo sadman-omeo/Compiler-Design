@@ -1,558 +1,757 @@
 %{
 
-#include"symbol_info.h"
+#include "symbol_table.h"
 
 #define YYSTYPE symbol_info*
 
+extern FILE *yyin;
 int yyparse(void);
 int yylex(void);
+extern YYSTYPE yylval;
 
-void yyerror(char *s);
+// create your symbol table here.
+// You can store the pointer to your symbol table in a global variable
+// or you can create an object
 
-extern FILE *yyin;
-
+int lines = 1;
 
 ofstream outlog;
 
-int line_num = 1;   /* CXhanging string to int since its needed to count */
+symbol_table *table = NULL;
 
-// declare any other variables or functions needed here
+string current_data_type = "";
+vector<pair<string, string>> current_parameters;
+
+bool function_scope_pending = false;
+
+int next_scope_id = 0;
+vector<int> active_scope_ids;
+
+// you may declare other necessary variables here to store necessary info
+// such as current variable type, variable list, function name, return type, function parameter types, parameters names etc.
+
+void yyerror(char *s)
+{
+	outlog<<"At line "<<lines<<" "<<s<<endl<<endl;
+
+    // you may need to reinitialize variables if you find an error
+}
 
 %}
 
-%token IF FOR WHILE DO BREAK INT CHAR FLOAT DOUBLE CONTINUE CASE VOID SWITCH DEFAULT GOTO RETURN PRINTLN
-%token ID CONST_INT CONST_FLOAT
-%token ADDOP MULOP INCOP DECOP RELOP ASSIGNOP LOGICOP NOT
-%token LPAREN RPAREN LCURL RCURL LTHIRD RTHIRD COMMA COLON SEMICOLON
+%token IF ELSE FOR WHILE DO BREAK INT CHAR FLOAT DOUBLE VOID RETURN SWITCH CASE DEFAULT CONTINUE PRINTLN ADDOP MULOP INCOP DECOP RELOP ASSIGNOP LOGICOP NOT LPAREN RPAREN LCURL RCURL LTHIRD RTHIRD COMMA SEMICOLON CONST_INT CONST_FLOAT ID
 
 %nonassoc LOWER_THAN_ELSE
 %nonassoc ELSE
-
-
 
 %%
 
 start : program
 	{
-		outlog<<"At line no: "<<line_num<<" start : program "<<endl<<endl;
+		outlog<<"At line no: "<<lines<<" start : program "<<endl<<endl;
+		outlog<<"Symbol Table"<<endl<<endl;
+		
+		// Print your whole symbol table here
+		table->print_all_scopes(outlog);
 	}
 	;
-
 
 program : program unit
 	{
-		outlog<<"At line no: "<<line_num<<" program : program unit "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()+"\n"+$2->getnameofsymbol()<<endl<<endl;
+		outlog<<"At line no: "<<lines<<" program : program unit "<<endl<<endl;
+		outlog<<$1->getname()+"\n"+$2->getname()<<endl<<endl;
 		
-		$$ = new symbol_info($1->getnameofsymbol()+"\n"+$2->getnameofsymbol(),"program");
+		$$ = new symbol_info($1->getname()+"\n"+$2->getname(),"program");
 	}
 	| unit
-	{	
-		outlog<<"At line no: "<<line_num<<" program : unit "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-
-		$$ = new symbol_info($1->getnameofsymbol(),"program");
-
+	{
+		outlog<<"At line no: "<<lines<<" program : unit "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
+		
+		$$ = new symbol_info($1->getname(),"program");
 	}
 	;
-
 
 unit : variable_decl
-	{
-		outlog<<"At line no: "<<line_num<<" unit : variable_decl "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-
-		$$ = new symbol_info($1->getnameofsymbol(),"unit");
-	}
-	| func_definition
-	{
-		outlog<<"At line no: "<<line_num<<" unit : func_definition "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-
-		$$ = new symbol_info($1->getnameofsymbol(),"unit");
-	};
-
-
-type_specifier : INT
-	{
-		outlog<<"At line no: "<<line_num<<" type_specifier : INT "<<endl<<endl;
-		outlog<<"int"<<endl<<endl;
-
-		$$ = new symbol_info("int","type_specifier");
-	}
-	| FLOAT
-	{
-		outlog<<"At line no: "<<line_num<<" type_specifier : FLOAT "<<endl<<endl;
-		outlog<<"float"<<endl<<endl;
-
-		$$ = new symbol_info("float","type_specifier");
-	}
-	| VOID
-	{
-		outlog<<"At line no: "<<line_num<<" type_specifier : VOID "<<endl<<endl;
-		outlog<<"void"<<endl<<endl;
-
-		$$ = new symbol_info("void","type_specifier");
-	}
-	| CHAR
-	{
-		outlog<<"At line no: "<<line_num<<" type_specifier : CHAR "<<endl<<endl;
-		outlog<<"char"<<endl<<endl;
-
-		$$ = new symbol_info("char","type_specifier");
-	};
-
-	
-
-func_definition : type_specifier ID LPAREN param_list RPAREN compound_statement
-	{	
-		outlog<<"At line no: "<<line_num<<" func_definition : type_specifier ID LPAREN param_list RPAREN compound_statement "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<" "<<$2->getnameofsymbol()<<"("<<$4->getnameofsymbol()<<")\n"<<$6->getnameofsymbol()<<endl<<endl;
-
-		$$ = new symbol_info($1->getnameofsymbol()+" "+$2->getnameofsymbol()+"("+$4->getnameofsymbol()+")\n"+$6->getnameofsymbol(),"func_definition");
-	}
-	| type_specifier ID LPAREN RPAREN compound_statement
-	{
+	 {
+		outlog<<"At line no: "<<lines<<" unit : variable_decl "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
 		
-		outlog<<"At line no: "<<line_num<<" func_definition : type_specifier ID LPAREN RPAREN compound_statement "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<" "<<$2->getnameofsymbol()<<"()\n"<<$5->getnameofsymbol()<<endl<<endl;
-			
-		$$ = new symbol_info($1->getnameofsymbol()+" "+$2->getnameofsymbol()+"()\n"+$5->getnameofsymbol(),"func_definition");	
-	}
-	;
-	
+		$$ = new symbol_info($1->getname(),"unit");
+	 }
+     | func_definition
+     {
+		outlog<<"At line no: "<<lines<<" unit : func_definition "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
+		
+		$$ = new symbol_info($1->getname(),"unit");
+	 }
+     ;
 
+func_definition : type_specifier ID LPAREN param_list RPAREN 
+		{
+            symbol_info *function_symbol = new symbol_info($2->getname(), "ID");
+
+            function_symbol->set_symbol_category("Function Definition");
+            function_symbol->set_data_type($1->getname());
+            function_symbol->set_parameters(current_parameters);
+
+            table->insert(function_symbol);
+
+            function_scope_pending = true;
+        }
+		compound_statement
+		
+		{	
+			outlog<<"At line no: "<<lines<<" func_definition : type_specifier ID LPAREN param_list RPAREN compound_statement "<<endl<<endl;
+			outlog<<$1->getname()<<" "<<$2->getname()<<"("+$4->getname()+")\n"<<$7->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+" "+$2->getname()+"("+$4->getname()+")\n"+$7->getname(),"func_def");	
+			
+			// The function definition is complete.
+            // You can now insert necessary information about the function into the symbol table
+            // However, note that the scope of the function and the scope of the compound statement are different.
+		}
+		| type_specifier ID LPAREN RPAREN 
+		{
+            current_parameters.clear();
+
+            symbol_info *function_symbol = new symbol_info($2->getname(), "ID");
+
+            function_symbol->set_symbol_category("Function Definition");
+			function_symbol->set_data_type($1->getname());
+            function_symbol->set_parameters(current_parameters);
+
+            table->insert(function_symbol);
+
+            function_scope_pending = true;
+        }
+		compound_statement
+		{
+			
+			outlog<<"At line no: "<<lines<<" func_definition : type_specifier ID LPAREN RPAREN compound_statement "<<endl<<endl;
+			outlog<<$1->getname()<<" "<<$2->getname()<<"()\n"<<$6->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+" "+$2->getname()+"()\n"+$6->getname(),"func_def");	
+			
+			// The function definition is complete.
+            // You can now insert necessary information about the function into the symbol table
+            // However, note that the scope of the function and the scope of the compound statement are different.
+		}
+ 		;
 
 param_list : param_list COMMA type_specifier ID
-	{
-		outlog<<"At line no: "<<line_num<<" param_list : param_list COMMA type_specifier ID "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<","<<$3->getnameofsymbol()<<" "<<$4->getnameofsymbol()<<endl<<endl;
+		{
+			outlog<<"At line no: "<<lines<<" param_list : param_list COMMA type_specifier ID "<<endl<<endl;
+			outlog<<$1->getname()<<","<<$3->getname()<<" "<<$4->getname()<<endl<<endl;
 
-		$$ = new symbol_info($1->getnameofsymbol()+","+$3->getnameofsymbol()+" "+$4->getnameofsymbol(),"param_list");
-	}
-	| param_list COMMA type_specifier
-	{
-		outlog<<"At line no: "<<line_num<<" param_list : param_list COMMA type_specifier "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<","<<$3->getnameofsymbol()<<endl<<endl;
-
-		$$ = new symbol_info($1->getnameofsymbol()+","+$3->getnameofsymbol(),"param_list");
-	}
-	| type_specifier ID
-	{
-		outlog<<"At line no: "<<line_num<<" param_list : type_specifier ID "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<" "<<$2->getnameofsymbol()<<endl<<endl;
-
-		$$ = new symbol_info($1->getnameofsymbol()+" "+$2->getnameofsymbol(),"param_list");
-	}
-	| type_specifier
-	{
-		outlog<<"At line no: "<<line_num<<" param_list : type_specifier "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-
-		$$ = new symbol_info($1->getnameofsymbol(),"param_list");
-	};
-
-
-
-compound_statement : LCURL statements RCURL
-	{
-		outlog<<"At line no: "<<line_num<<" compound_statement : LCURL statements RCURL "<<endl<<endl;
-		outlog<<"{\n"<<$2->getnameofsymbol()<<"\n}"<<endl<<endl;
-
-		$$ = new symbol_info("{\n"+$2->getnameofsymbol()+"\n}","compound_statement");
-	}
-	| LCURL RCURL
-	{
-		outlog<<"At line no: "<<line_num<<" compound_statement : LCURL RCURL "<<endl<<endl;
-		outlog<<"{\n}"<<endl<<endl;
-
-		$$ = new symbol_info("{\n}","compound_statement");
-	};
-
-
-variable_decl : type_specifier declaration_list SEMICOLON
-	{
-		outlog<<"At line no: "<<line_num<<" variable_decl : type_specifier declaration_list SEMICOLON "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<" "<<$2->getnameofsymbol()<<";"<<endl<<endl;
+			current_parameters.push_back(
+                {$3->getname(), $4->getname()}
+            );
+					
+			$$ = new symbol_info($1->getname()+","+$3->getname()+" "+$4->getname(),"param_list");
 			
-		$$ = new symbol_info($1->getnameofsymbol()+" "+$2->getnameofsymbol()+";","variable_decl");
-	};
+            // store the necessary information about the function parameters
+            // They will be needed when you want to enter the function into the symbol table
+		}
+		| param_list COMMA type_specifier
+		{
+			outlog<<"At line no: "<<lines<<" param_list : param_list COMMA type_specifier "<<endl<<endl;
+			outlog<<$1->getname()<<","<<$3->getname()<<endl<<endl;
 
+			current_parameters.push_back(
+                {$3->getname(), ""}
+            );
+			
+			$$ = new symbol_info($1->getname()+","+$3->getname(),"param_list");
+			
+            // store the necessary information about the function parameters
+            // They will be needed when you want to enter the function into the symbol table
+		}
+ 		| type_specifier ID
+ 		{
+			outlog<<"At line no: "<<lines<<" param_list : type_specifier ID "<<endl<<endl;
+			outlog<<$1->getname()<<" "<<$2->getname()<<endl<<endl;
+
+			current_parameters.clear();
+            current_parameters.push_back(
+                {$1->getname(), $2->getname()}
+            );
+			
+			$$ = new symbol_info($1->getname()+" "+$2->getname(),"param_list");
+			
+            // store the necessary information about the function parameters
+            // They will be needed when you want to enter the function into the symbol table
+		}
+		| type_specifier
+		{
+			outlog<<"At line no: "<<lines<<" param_list : type_specifier "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+
+			current_parameters.clear();
+            current_parameters.push_back(
+                {$1->getname(), ""}
+            );
+			
+			$$ = new symbol_info($1->getname(),"param_list");
+			
+            // store the necessary information about the function parameters
+            // They will be needed when you want to enter the function into the symbol table
+		}
+ 		;
+
+compound_statement : LCURL
+			{
+                table->enter_scope();
+
+                next_scope_id++;
+                active_scope_ids.push_back(next_scope_id);
+
+                outlog << "New ScopeTable with ID "
+                       << next_scope_id
+                       << " created" << endl << endl;
+
+                if(function_scope_pending)
+                {
+                    for(pair<string, string> parameter : current_parameters)
+                    {
+                        if(parameter.second != "")
+                        {
+                            symbol_info *parameter_symbol = new symbol_info(parameter.second,"ID");
+
+                            parameter_symbol->set_symbol_category("Variable");
+                            parameter_symbol->set_data_type(parameter.first);
+
+                            table->insert(parameter_symbol);
+                        }
+                    }
+
+                    function_scope_pending = false;
+                    current_parameters.clear();
+                }
+            }
+			statements RCURL
+			{ 
+ 		    	outlog<<"At line no: "<<lines<<" compound_statement : LCURL statements RCURL "<<endl<<endl;
+				outlog<<"{\n"+$3->getname()+"\n}"<<endl<<endl;
+				
+				$$ = new symbol_info("{\n"+$3->getname()+"\n}","comp_stmnt");
+				
+                // The compound statement is complete.
+                // Print the symbol table here and exit the scope
+                // Note that function parameters should be in the current scope
+
+				table->print_all_scopes(outlog);
+
+                int removed_scope_id = active_scope_ids.back();
+
+                table->exit_scope();
+                active_scope_ids.pop_back();
+
+                outlog << "Scopetable with ID "
+                       << removed_scope_id
+                       << " removed" << endl << endl;
+ 		    }
+ 		    | LCURL 
+			{
+                table->enter_scope();
+
+                next_scope_id++;
+                active_scope_ids.push_back(next_scope_id);
+
+                outlog << "New ScopeTable with ID "
+                       << next_scope_id
+                       << " created" << endl << endl;
+
+                if(function_scope_pending)
+                {
+                    for(pair<string, string> parameter : current_parameters)
+                    {
+                        if(parameter.second != "")
+                        {
+                            symbol_info *parameter_symbol = new symbol_info(parameter.second, "ID");
+
+                            parameter_symbol->set_symbol_category("Variable");
+                            parameter_symbol->set_data_type(parameter.first);
+
+                            table->insert(parameter_symbol);
+                        }
+                    }
+
+                    function_scope_pending = false;
+                    current_parameters.clear();
+                }
+            }
+			RCURL
+ 		    { 
+ 		    	outlog<<"At line no: "<<lines<<" compound_statement : LCURL RCURL "<<endl<<endl;
+				outlog<<"{\n}"<<endl<<endl;
+				
+				$$ = new symbol_info("{\n}","comp_stmnt");
+				
+				// The compound statement is complete.
+                // Print the symbol table here and exit the scope
+
+				table->print_all_scopes(outlog);
+
+                int removed_scope_id = active_scope_ids.back();
+
+                table->exit_scope();
+                active_scope_ids.pop_back();
+
+                outlog << "Scopetable with ID "
+                       << removed_scope_id
+                       << " removed" << endl << endl;
+ 		    }
+ 		    ;
+ 		    
+variable_decl : type_specifier declaration_list SEMICOLON
+		 {
+			outlog<<"At line no: "<<lines<<" variable_decl : type_specifier declaration_list SEMICOLON "<<endl<<endl;
+			outlog<<$1->getname()<<" "<<$2->getname()<<";"<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+" "+$2->getname()+";","var_dec");
+			
+			// Insert necessary information about the variables in the symbol table
+		 }
+ 		 ;
+
+type_specifier : INT
+		{
+			outlog<<"At line no: "<<lines<<" type_specifier : INT "<<endl<<endl;
+			outlog<<"int"<<endl<<endl;
+
+			current_data_type = "int";
+			
+			$$ = new symbol_info("int","type");
+	    }
+ 		| FLOAT
+ 		{
+			outlog<<"At line no: "<<lines<<" type_specifier : FLOAT "<<endl<<endl;
+			outlog<<"float"<<endl<<endl;
+
+			current_data_type = "float";
+			
+			$$ = new symbol_info("float","type");
+	    }
+ 		| VOID
+ 		{
+			outlog<<"At line no: "<<lines<<" type_specifier : VOID "<<endl<<endl;
+			outlog<<"void"<<endl<<endl;
+
+			current_data_type = "void";
+			
+			$$ = new symbol_info("void","type");
+	    }
+		| CHAR
+ 		{
+			outlog<<"At line no: "<<lines<<" type_specifier : CHAR "<<endl<<endl;
+			outlog<<"char"<<endl<<endl;
+
+			current_data_type = "char";
+			
+			$$ = new symbol_info("char","type");
+	    }
+ 		;
 
 declaration_list : declaration_list COMMA ID
-	{
-		outlog<<"At line no: "<<line_num<<" declaration_list : declaration_list COMMA ID "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<","<<$3->getnameofsymbol()<<endl<<endl;
+		  {
+ 		  	outlog<<"At line no: "<<lines<<" declaration_list : declaration_list COMMA ID "<<endl<<endl;
+ 		  	outlog<<$1->getname()+","<<$3->getname()<<endl<<endl;
+
+            // you may need to store the variable names to insert them in symbol table here or later
+			symbol_info *variable_symbol = new symbol_info($3->getname(), "ID");
+
+			variable_symbol->set_symbol_category("Variable");
+            variable_symbol->set_data_type(current_data_type);
+
+			table->insert(variable_symbol);
+
+			$$ = new symbol_info($1->getname()+","+$3->getname(), "declaration_list");
 			
-		$$ = new symbol_info($1->getnameofsymbol()+","+$3->getnameofsymbol(),"declaration_list");
-	}
-	| declaration_list COMMA ID LTHIRD CONST_INT RTHIRD
-	{
-		outlog<<"At line no: "<<line_num<<" declaration_list : declaration_list COMMA ID LTHIRD CONST_INT RTHIRD "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<","<<$3->getnameofsymbol()<<"["<<$5->getnameofsymbol()<<"]"<<endl<<endl;
+ 		  }
+ 		  | declaration_list COMMA ID LTHIRD CONST_INT RTHIRD //array after some declaration
+ 		  {
+ 		  	outlog<<"At line no: "<<lines<<" declaration_list : declaration_list COMMA ID LTHIRD CONST_INT RTHIRD "<<endl<<endl;
+ 		  	outlog<<$1->getname()+","<<$3->getname()<<"["<<$5->getname()<<"]"<<endl<<endl;
 
-		$$ = new symbol_info($1->getnameofsymbol()+","+$3->getnameofsymbol()+"["+$5->getnameofsymbol()+"]","declaration_list");
-	}
-	| ID
-	{
-		outlog<<"At line no: "<<line_num<<" declaration_list : ID "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"declaration_list");
-	}
-	| ID LTHIRD CONST_INT RTHIRD
-	{
-		outlog<<"At line no: "<<line_num<<" declaration_list : ID LTHIRD CONST_INT RTHIRD "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<"["<<$3->getnameofsymbol()<<"]"<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+"["+$3->getnameofsymbol()+"]","declaration_list");
-	}
-	;
+            // you may need to store the variable names to insert them in symbol table here or later
 
+			symbol_info *array_symbol = new symbol_info($3->getname(), "ID");
+
+			array_symbol->set_symbol_category("Array");
+            array_symbol->set_data_type(current_data_type);
+            array_symbol->set_array_size(stoi($5->getname()));
+
+            table->insert(array_symbol);
+
+            $$ = new symbol_info($1->getname()+","+$3->getname()+"["+$5->getname()+"]", "declaration_list");
+
+ 		  }
+ 		  |ID
+ 		  {
+ 		  	outlog<<"At line no: "<<lines<<" declaration_list : ID "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+
+            // you may need to store the variable names to insert them in symbol table here or later
+
+			symbol_info *variable_symbol = new symbol_info($1->getname(), "ID");
+
+            variable_symbol->set_symbol_category("Variable");
+            variable_symbol->set_data_type(current_data_type);
+
+            table->insert(variable_symbol);
+
+            $$ = new symbol_info($1->getname(), "declaration_list");
+			
+ 		  }
+ 		  | ID LTHIRD CONST_INT RTHIRD //array
+ 		  {
+ 		  	outlog<<"At line no: "<<lines<<" declaration_list : ID LTHIRD CONST_INT RTHIRD "<<endl<<endl;
+			outlog<<$1->getname()<<"["<<$3->getname()<<"]"<<endl<<endl;
+
+            // you may need to store the variable names to insert them in symbol table here or later
+			
+			symbol_info *array_symbol = new symbol_info($1->getname(), "ID");
+
+            array_symbol->set_symbol_category("Array");
+            array_symbol->set_data_type(current_data_type);
+            array_symbol->set_array_size(stoi($3->getname()));
+
+            table->insert(array_symbol);
+
+            $$ = new symbol_info($1->getname()+"["+$3->getname()+"]", "declaration_list");
+ 		  }
+ 		  ;
+ 		  
 
 statements : statement
-	{
-		outlog<<"At line no: "<<line_num<<" statements : statement "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"statements");
-	}
-	| statements statement
-	{
-		outlog<<"At line no: "<<line_num<<" statements : statements statement "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<"\n"<<$2->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+"\n"+$2->getnameofsymbol(),"statements");
-	}
-	;
-
-
-
+	   {
+	    	outlog<<"At line no: "<<lines<<" statements : statement "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"stmnts");
+	   }
+	   | statements statement
+	   {
+	    	outlog<<"At line no: "<<lines<<" statements : statements statement "<<endl<<endl;
+			outlog<<$1->getname()<<"\n"<<$2->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+"\n"+$2->getname(),"stmnts");
+	   }
+	   ;
+	   
 statement : variable_decl
-	{
-		outlog<<"At line no: "<<line_num<<" statement : variable_decl "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"statement");
-	}
-	| expression_statement
-	{
-		outlog<<"At line no: "<<line_num<<" statement : expression_statement "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"statement");
-	}
-	| compound_statement
-	{
-		outlog<<"At line no: "<<line_num<<" statement : compound_statement "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"statement");
-	}
-	| FOR LPAREN expression_statement expression_statement expression RPAREN statement
-	{
-		outlog<<"At line no: "<<line_num<<" statement : FOR LPAREN expression_statement expression_statement expression RPAREN statement "<<endl<<endl;
-		outlog<<"for("<<$3->getnameofsymbol()<<$4->getnameofsymbol()<<$5->getnameofsymbol()<<")\n"<<$7->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info("for("+$3->getnameofsymbol()+$4->getnameofsymbol()+$5->getnameofsymbol()+")\n"+$7->getnameofsymbol(),"statement");
-	}
-	| IF LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE
-	{
-		outlog<<"At line no: "<<line_num<<" statement : IF LPAREN expression RPAREN statement "<<endl<<endl;
-		outlog<<"if("<<$3->getnameofsymbol()<<")\n"<<$5->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info("if("+$3->getnameofsymbol()+")\n"+$5->getnameofsymbol(),"statement");
-	}
-	| IF LPAREN expression RPAREN statement ELSE statement
-	{
-		outlog<<"At line no: "<<line_num<<" statement : IF LPAREN expression RPAREN statement ELSE statement "<<endl<<endl;
-		outlog<<"if("<<$3->getnameofsymbol()<<")\n"<<$5->getnameofsymbol()<<"\nelse\n"<<$7->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info("if("+$3->getnameofsymbol()+")\n"+$5->getnameofsymbol()+"\nelse\n"+$7->getnameofsymbol(),"statement");
-	}
-	| WHILE LPAREN expression RPAREN statement
-	{
-		outlog<<"At line no: "<<line_num<<" statement : WHILE LPAREN expression RPAREN statement "<<endl<<endl;
-		outlog<<"while("<<$3->getnameofsymbol()<<")\n"<<$5->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info("while("+$3->getnameofsymbol()+")\n"+$5->getnameofsymbol(),"statement");
-	}
-	| PRINTLN LPAREN ID RPAREN SEMICOLON
-	{
-		outlog<<"At line no: "<<line_num<<" statement : PRINTLN LPAREN ID RPAREN SEMICOLON "<<endl<<endl;
-		outlog<<"printf("<<$3->getnameofsymbol()<<");"<<endl<<endl;
-		
-		$$ = new symbol_info("printf("+$3->getnameofsymbol()+");","statement");
-	}
-	| RETURN expression SEMICOLON
-	{
-		outlog<<"At line no: "<<line_num<<" statement : RETURN expression SEMICOLON "<<endl<<endl;
-		outlog<<"return "<<$2->getnameofsymbol()<<";"<<endl<<endl;
-		
-		$$ = new symbol_info("return "+$2->getnameofsymbol()+";","statement");
-	}
-	;
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : variable_decl "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"stmnt");
+	  }
+	  | func_definition
+	  {
+	  		outlog<<"At line no: "<<lines<<" statement : func_definition "<<endl<<endl;
+            outlog<<$1->getname()<<endl<<endl;
 
-
+            $$ = new symbol_info($1->getname(),"stmnt");
+	  		
+	  }
+	  | expression_statement
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : expression_statement "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"stmnt");
+	  }
+	  | compound_statement
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : compound_statement "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"stmnt");
+	  }
+	  | FOR LPAREN expression_statement expression_statement expression RPAREN statement
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : FOR LPAREN expression_statement expression_statement expression RPAREN statement "<<endl<<endl;
+			outlog<<"for("<<$3->getname()<<$4->getname()<<$5->getname()<<")\n"<<$7->getname()<<endl<<endl;
+			
+			$$ = new symbol_info("for("+$3->getname()+$4->getname()+$5->getname()+")\n"+$7->getname(),"stmnt");
+	  }
+	  | IF LPAREN expression RPAREN statement %prec LOWER_THAN_ELSE
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : IF LPAREN expression RPAREN statement "<<endl<<endl;
+			outlog<<"if("<<$3->getname()<<")\n"<<$5->getname()<<endl<<endl;
+			
+			$$ = new symbol_info("if("+$3->getname()+")\n"+$5->getname(),"stmnt");
+	  }
+	  | IF LPAREN expression RPAREN statement ELSE statement
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : IF LPAREN expression RPAREN statement ELSE statement "<<endl<<endl;
+			outlog<<"if("<<$3->getname()<<")\n"<<$5->getname()<<"\nelse\n"<<$7->getname()<<endl<<endl;
+			
+			$$ = new symbol_info("if("+$3->getname()+")\n"+$5->getname()+"\nelse\n"+$7->getname(),"stmnt");
+	  }
+	  | WHILE LPAREN expression RPAREN statement
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : WHILE LPAREN expression RPAREN statement "<<endl<<endl;
+			outlog<<"while("<<$3->getname()<<")\n"<<$5->getname()<<endl<<endl;
+			
+			$$ = new symbol_info("while("+$3->getname()+")\n"+$5->getname(),"stmnt");
+	  }
+	  | PRINTLN LPAREN ID RPAREN SEMICOLON
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : PRINTLN LPAREN ID RPAREN SEMICOLON "<<endl<<endl;
+			outlog<<"printf("<<$3->getname()<<");"<<endl<<endl; 
+			
+			$$ = new symbol_info("printf("+$3->getname()+");","stmnt");
+	  }
+	  | RETURN expression SEMICOLON
+	  {
+	    	outlog<<"At line no: "<<lines<<" statement : RETURN expression SEMICOLON "<<endl<<endl;
+			outlog<<"return "<<$2->getname()<<";"<<endl<<endl;
+			
+			$$ = new symbol_info("return "+$2->getname()+";","stmnt");
+	  }
+	  ;
+	  
 expression_statement : SEMICOLON
-	{
-		outlog<<"At line no: "<<line_num<<" expression_statement : SEMICOLON "<<endl<<endl;
-		outlog<<";"<<endl<<endl;
+			{
+				outlog<<"At line no: "<<lines<<" expression_statement : SEMICOLON "<<endl<<endl;
+				outlog<<";"<<endl<<endl;
+				
+				$$ = new symbol_info(";","expr_stmt");
+	        }			
+			| expression SEMICOLON 
+			{
+				outlog<<"At line no: "<<lines<<" expression_statement : expression SEMICOLON "<<endl<<endl;
+				outlog<<$1->getname()<<";"<<endl<<endl;
+				
+				$$ = new symbol_info($1->getname()+";","expr_stmt");
+	        }
+			;
+	  
+variable : ID 	
+      {
+	    outlog<<"At line no: "<<lines<<" variable : ID "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
+			
+		$$ = new symbol_info($1->getname(),"varbl");
 		
-		$$ = new symbol_info(";","expression_statement");
-	}
-	| expression SEMICOLON
-	{
-		outlog<<"At line no: "<<line_num<<" expression_statement : expression SEMICOLON "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<";"<<endl<<endl;
+	 }	
+	 | ID LTHIRD expression RTHIRD 
+	 {
+	 	outlog<<"At line no: "<<lines<<" variable : ID LTHIRD expression RTHIRD "<<endl<<endl;
+		outlog<<$1->getname()<<"["<<$3->getname()<<"]"<<endl<<endl;
 		
-		$$ = new symbol_info($1->getnameofsymbol()+";","expression_statement");
-	}
-	;
-
-
-variable : ID
-	{
-		outlog<<"At line no: "<<line_num<<" variable : ID "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"variable");
-	}
-	| ID LTHIRD expression RTHIRD
-	{
-		outlog<<"At line no: "<<line_num<<" variable : ID LTHIRD expression RTHIRD "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<"["<<$3->getnameofsymbol()<<"]"<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+"["+$3->getnameofsymbol()+"]","variable"); 
-	}
-	;
-
-
+		$$ = new symbol_info($1->getname()+"["+$3->getname()+"]","varbl");
+	 }
+	 ;
+	 
 expression : logic_expression
-	{
-		outlog<<"At line no: "<<line_num<<" expression : logic_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"expression");
-	}
-	| variable ASSIGNOP logic_expression
-	{
-		outlog<<"At line no: "<<line_num<<" expression : variable ASSIGNOP logic_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<$3->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol()+$3->getnameofsymbol(),"expression");
-	}
-	;
+	   {
+	    	outlog<<"At line no: "<<lines<<" expression : logic_expression "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"expr");
+	   }
+	   | variable ASSIGNOP logic_expression 	
+	   {
+	    	outlog<<"At line no: "<<lines<<" expression : variable ASSIGNOP logic_expression "<<endl<<endl;
+			outlog<<$1->getname()<<"="<<$3->getname()<<endl<<endl;
 
-
+			$$ = new symbol_info($1->getname()+"="+$3->getname(),"expr");
+	   }
+	   ;
+			
 logic_expression : rel_expression
-	{
-		outlog<<"At line no: "<<line_num<<" logic_expression : rel_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"logic_expression");
-	}
-	| rel_expression LOGICOP rel_expression
-	{
-		outlog<<"At line no: "<<line_num<<" logic_expression : rel_expression LOGICOP rel_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<$3->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol()+$3->getnameofsymbol(),"logic_expression");
-	}
-	;
-
-
-rel_expression : simple_expression
-	{
-		outlog<<"At line no: "<<line_num<<" rel_expression : simple_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"rel_expression");
-	}
-	| simple_expression RELOP simple_expression
-	{
-		outlog<<"At line no: "<<line_num<<" rel_expression : simple_expression RELOP simple_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<$3->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol()+$3->getnameofsymbol(),"rel_expression");
-	}
-	;
-
-
-
+	     {
+	    	outlog<<"At line no: "<<lines<<" logic_expression : rel_expression "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"lgc_expr");
+	     }	
+		 | rel_expression LOGICOP rel_expression 
+		 {
+	    	outlog<<"At line no: "<<lines<<" logic_expression : rel_expression LOGICOP rel_expression "<<endl<<endl;
+			outlog<<$1->getname()<<$2->getname()<<$3->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+$2->getname()+$3->getname(),"lgc_expr");
+	     }	
+		 ;
+			
+rel_expression	: simple_expression
+		{
+	    	outlog<<"At line no: "<<lines<<" rel_expression : simple_expression "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"rel_expr");
+	    }
+		| simple_expression RELOP simple_expression
+		{
+	    	outlog<<"At line no: "<<lines<<" rel_expression : simple_expression RELOP simple_expression "<<endl<<endl;
+			outlog<<$1->getname()<<$2->getname()<<$3->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+$2->getname()+$3->getname(),"rel_expr");
+	    }
+		;
+				
 simple_expression : term
-	{
-		outlog<<"At line no: "<<line_num<<" simple_expression : term "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"simple_expression");
-	}
-	| simple_expression ADDOP term
-	{
-		outlog<<"At line no: "<<line_num<<" simple_expression : simple_expression ADDOP term "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<$3->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol()+$3->getnameofsymbol(),"simple_expression");
-	}
-	;
+          {
+	    	outlog<<"At line no: "<<lines<<" simple_expression : term "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"simp_expr");
+			
+	      }
+		  | simple_expression ADDOP term 
+		  {
+	    	outlog<<"At line no: "<<lines<<" simple_expression : simple_expression ADDOP term "<<endl<<endl;
+			outlog<<$1->getname()<<$2->getname()<<$3->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+$2->getname()+$3->getname(),"simp_expr");
+	      }
+		  ;
+					
+term :	unary_expression //term can be void because of un_expr->factor
+     {
+	    	outlog<<"At line no: "<<lines<<" term : unary_expression "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"term");
+			
+	 }
+     |  term MULOP unary_expression
+     {
+	    	outlog<<"At line no: "<<lines<<" term : term MULOP unary_expression "<<endl<<endl;
+			outlog<<$1->getname()<<$2->getname()<<$3->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+$2->getname()+$3->getname(),"term");
+			
+	 }
+     ;
 
-
-
-
-term : unary_expression
-	{
-		outlog<<"At line no: "<<line_num<<" term : unary_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"term");
-	}
-	| term MULOP unary_expression
-	{
-		outlog<<"At line no: "<<line_num<<" term : term MULOP unary_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<$3->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol()+$3->getnameofsymbol(),"term");
-	}
-	;
-
-
-
-unary_expression : ADDOP unary_expression
-	{
-		outlog<<"At line no: "<<line_num<<" unary_expression : ADDOP unary_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol(),"unary_expression");
-	}
-	| NOT unary_expression
-	{
-		outlog<<"At line no: "<<line_num<<" unary_expression : NOT unary_expression "<<endl<<endl;
-		outlog<<"!"<<$2->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info("!"+$2->getnameofsymbol(),"unary_expression");
-	}
-	| factor_info
-	{
-		outlog<<"At line no: "<<line_num<<" unary_expression : factor_info "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"unary_expression");
-	}
-	;
-
-
-factor_info : factor
-	{
-		outlog<<"At line no: "<<line_num<<" factor_info : factor "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"factor_info");
-	}
-	;
-
-
-
-factor : variable
-	{
-		outlog<<"At line no: "<<line_num<<" factor : variable "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"factor");
+unary_expression : ADDOP unary_expression  // un_expr can be void because of factor
+		 {
+	    	outlog<<"At line no: "<<lines<<" unary_expression : ADDOP unary_expression "<<endl<<endl;
+			outlog<<$1->getname()<<$2->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname()+$2->getname(),"un_expr");
+	     }
+		 | NOT unary_expression 
+		 {
+	    	outlog<<"At line no: "<<lines<<" unary_expression : NOT unary_expression "<<endl<<endl;
+			outlog<<"!"<<$2->getname()<<endl<<endl;
+			
+			$$ = new symbol_info("!"+$2->getname(),"un_expr");
+	     }
+		 | factor_info  
+		 {
+	    	outlog<<"At line no: "<<lines<<" unary_expression : factor_info  "<<endl<<endl;
+			outlog<<$1->getname()<<endl<<endl;
+			
+			$$ = new symbol_info($1->getname(),"un_expr");
+	     }
+		 ;
+factor_info : factor	{
+	    outlog<<"At line no: "<<lines<<" factor_info : factor "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
+			
+		$$ = new symbol_info($1->getname(),"fctr_info");
+	}	
+factor	: variable
+    {
+	    outlog<<"At line no: "<<lines<<" factor : variable "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
+			
+		$$ = new symbol_info($1->getname(),"fctr");
 	}
 	| ID LPAREN argument_list RPAREN
 	{
-		outlog<<"At line no: "<<line_num<<" factor : ID LPAREN argument_list RPAREN "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<"("<<$3->getnameofsymbol()<<")"<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+"("+$3->getnameofsymbol()+")","factor");
+	    outlog<<"At line no: "<<lines<<" factor : ID LPAREN argument_list RPAREN "<<endl<<endl;
+		outlog<<$1->getname()<<"("<<$3->getname()<<")"<<endl<<endl;
+
+		$$ = new symbol_info($1->getname()+"("+$3->getname()+")","fctr");
 	}
 	| LPAREN expression RPAREN
 	{
-		outlog<<"At line no: "<<line_num<<" factor : LPAREN expression RPAREN "<<endl<<endl;
-		outlog<<"("<<$2->getnameofsymbol()<<")"<<endl<<endl;
+	   	outlog<<"At line no: "<<lines<<" factor : LPAREN expression RPAREN "<<endl<<endl;
+		outlog<<"("<<$2->getname()<<")"<<endl<<endl;
 		
-		$$ = new symbol_info("("+$2->getnameofsymbol()+")","factor");
+		$$ = new symbol_info("("+$2->getname()+")","fctr");
 	}
-	| CONST_INT
+	| CONST_INT 
 	{
-		outlog<<"At line no: "<<line_num<<" factor : CONST_INT "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"factor");
+	    outlog<<"At line no: "<<lines<<" factor : CONST_INT "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
+			
+		$$ = new symbol_info($1->getname(),"fctr");
 	}
 	| CONST_FLOAT
 	{
-		outlog<<"At line no: "<<line_num<<" factor : CONST_FLOAT "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"factor");
+	    outlog<<"At line no: "<<lines<<" factor : CONST_FLOAT "<<endl<<endl;
+		outlog<<$1->getname()<<endl<<endl;
+			
+		$$ = new symbol_info($1->getname(),"fctr");
 	}
-	| variable INCOP
+	| variable INCOP 
 	{
-		outlog<<"At line no: "<<line_num<<" factor : variable INCOP "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol(),"factor");
+	    outlog<<"At line no: "<<lines<<" factor : variable INCOP "<<endl<<endl;
+		outlog<<$1->getname()<<"++"<<endl<<endl;
+			
+		$$ = new symbol_info($1->getname()+"++","fctr");
 	}
 	| variable DECOP
 	{
-		outlog<<"At line no: "<<line_num<<" factor : variable DECOP "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<$2->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+$2->getnameofsymbol(),"factor");
+	    outlog<<"At line no: "<<lines<<" factor : variable DECOP "<<endl<<endl;
+		outlog<<$1->getname()<<"--"<<endl<<endl;
+			
+		$$ = new symbol_info($1->getname()+"--","fctr");
 	}
 	;
-
-
+	
 argument_list : arguments
-	{
-		outlog<<"At line no: "<<line_num<<" argument_list : arguments "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"argument_list");
-	}
-	|
-	{
-		outlog<<"At line no: "<<line_num<<" argument_list : "<<endl<<endl;
-		outlog<<""<<endl<<endl;
-		
-		$$ = new symbol_info("","argument_list");
-	}
-	;
-
-
+			  {
+					outlog<<"At line no: "<<lines<<" argument_list : arguments "<<endl<<endl;
+					outlog<<$1->getname()<<endl<<endl;
+						
+					$$ = new symbol_info($1->getname(),"arg_list");
+			  }
+			  |
+			  {
+					outlog<<"At line no: "<<lines<<" argument_list :  "<<endl<<endl;
+					outlog<<""<<endl<<endl;
+						
+					$$ = new symbol_info("","arg_list");
+			  }
+			  ;
+	
 arguments : arguments COMMA logic_expression
-	{
-		outlog<<"At line no: "<<line_num<<" arguments : arguments COMMA logic_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<","<<$3->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol()+","+$3->getnameofsymbol(),"arguments");
-	}
-	| logic_expression
-	{
-		outlog<<"At line no: "<<line_num<<" arguments : logic_expression "<<endl<<endl;
-		outlog<<$1->getnameofsymbol()<<endl<<endl;
-		
-		$$ = new symbol_info($1->getnameofsymbol(),"arguments");
-	}
-	;
-
-
-
-
+		  {
+				outlog<<"At line no: "<<lines<<" arguments : arguments COMMA logic_expression "<<endl<<endl;
+				outlog<<$1->getname()<<","<<$3->getname()<<endl<<endl;
+						
+				$$ = new symbol_info($1->getname()+","+$3->getname(),"arg");
+		  }
+	      | logic_expression
+	      {
+				outlog<<"At line no: "<<lines<<" arguments : logic_expression "<<endl<<endl;
+				outlog<<$1->getname()<<endl<<endl;
+						
+				$$ = new symbol_info($1->getname(),"arg");
+		  }
+	      ;
+ 
 
 %%
 
-int main(int c, char *v[])
+int main(int argc, char *argv[])
 {
-	if(c != 2) 
+	if(argc != 2) 
 	{
-		  // check if filename given
-		  cout<<"PLease provide the input file name"<<endl;
-		  return 0;
-
+		cout<<"Please input file name"<<endl;
+		return 0;
 	}
-	yyin = fopen(v[1], "r");
+	yyin = fopen(argv[1], "r");
 	outlog.open("22201333_23101140_log.txt", ios::trunc);
 	
 	if(yyin == NULL)
@@ -560,21 +759,28 @@ int main(int c, char *v[])
 		cout<<"Couldn't open file"<<endl;
 		return 0;
 	}
-    
+	// Enter the global or the first scope here
+
+	table = new symbol_table(10);
+	table->enter_scope();
+
+	next_scope_id++;
+	active_scope_ids.push_back(next_scope_id);
+
+	outlog << "New ScopeTable with ID "
+		   << next_scope_id
+		   <<" created" <<endl << endl;
+
 	yyparse();
 	
-	//print number of total lines
-	outlog<<"Total lines: "<<line_num<<endl;
+	outlog<<endl<<"Total lines: "<<lines<<endl;
+	
+	delete table;
+	table = NULL;
 	
 	outlog.close();
 	
 	fclose(yyin);
 	
 	return 0;
-}
-
-
-void yyerror(char *s)
-{
-	outlog<<"Error at line no: "<<line_num<<" "<<s<<endl;
 }
